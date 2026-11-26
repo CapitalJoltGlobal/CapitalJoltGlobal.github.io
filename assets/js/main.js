@@ -1,0 +1,29 @@
+'use strict';
+(() => {
+  const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const config = window.CJG_CONFIG || {};
+  const toast = $('#toast'); let toastTimer;
+  function message(text) { if (!toast) return; toast.textContent = text; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 5200); }
+  const menu = $('.menu-toggle'), nav = $('#main-nav');
+  function closeMenu() { if (nav && menu) { nav.classList.remove('open'); menu.setAttribute('aria-expanded', 'false'); menu.textContent = '選單 ☰'; } }
+  if(menu && nav) { menu.addEventListener('click', () => { const open = nav.classList.toggle('open'); menu.setAttribute('aria-expanded', String(open)); menu.textContent = open ? '關閉 ×' : '選單 ☰'; }); document.addEventListener('keydown', e => { if(e.key === 'Escape') { closeMenu(); menu.focus(); } }); document.addEventListener('click', e => { if(!e.target.closest('.site-header')) closeMenu(); }); nav.addEventListener('click', e => { if(e.target.closest('a')) closeMenu(); }); }
+  $$('img').forEach(img => { const failed = () => { const media = img.closest('.media'); if(media) { media.classList.add('is-missing'); media.setAttribute('role','img'); media.setAttribute('aria-label',img.alt); } else { const brand = img.closest('.brand'); if(brand) brand.classList.add('no-image'); } }; img.addEventListener('error',failed); if(img.complete && !img.naturalWidth) failed(); });
+  if ('IntersectionObserver' in window && !reduced) { const obs = new IntersectionObserver(entries => entries.forEach(e => { if(e.isIntersecting) { e.target.classList.add('in-view'); obs.unobserve(e.target); } }), {threshold:0.08}); $$('.reveal').forEach(el => obs.observe(el)); document.documentElement.classList.add('reveal-ready'); }
+  const top = $('.back-top'), progress = $('.reading-progress'); let ticking = false;
+  function scrollState() { const y = window.scrollY, total = document.documentElement.scrollHeight - window.innerHeight; if(top) top.classList.toggle('visible',y>650); if(progress) progress.style.width = `${total > 0 ? Math.min(100,y/total*100) : 0}%`; ticking = false; }
+  window.addEventListener('scroll', () => { if(!ticking) { requestAnimationFrame(scrollState); ticking = true; } }, {passive:true}); scrollState();
+  top?.addEventListener('click', () => window.scrollTo({top:0,behavior:reduced?'auto':'smooth'}));
+  const contactStatus = $('#contact-link-status');
+  $$('[data-contact]').forEach(a => { const kind = a.dataset.contact; const value = kind.startsWith('social:') ? config.socials?.[kind.slice(7)] : config[kind]; if(typeof value === 'string' && value.trim()) { a.href = kind === 'email' ? `mailto:${value}` : value; a.removeAttribute('data-pending'); a.querySelector('.placeholder-badge')?.remove(); const text = a.querySelector('[data-link-text]'); if(text) text.textContent = kind === 'email' ? value : kind === 'website' ? '造訪官方網站' : kind.slice(7); if(kind !== 'email') { a.target = '_blank'; a.rel = 'noopener noreferrer'; } } else { a.addEventListener('click', e => { e.preventDefault(); const name = kind === 'website' ? '官網' : kind === 'email' ? '電子郵件' : kind.slice(7); const text = `${name}連結尚待更新，請稍後再查看。`; message(text); if(contactStatus) { contactStatus.textContent = text; contactStatus.scrollIntoView({behavior:reduced?'auto':'smooth',block:'center'}); } }); } });
+  const form = $('#contact-form'); form?.addEventListener('submit', async e => { e.preventDefault(); if(!form.reportValidity()) return; const data = new FormData(form); const text = `姓名：${data.get('name')}\n電子郵件：${data.get('email')}\n主題：${data.get('topic')}\n\n${data.get('message')}`; const status = $('#form-status'); try { await navigator.clipboard.writeText(text); status.textContent = '聯絡內容已複製。目前表單不會寄送資料；正式聯絡管道更新後即可貼上使用。'; } catch { const out = $('#message-preview'); out.hidden = false; out.value = text; out.focus(); out.select(); status.textContent = '請手動複製下方內容。目前表單不會寄送資料。'; } });
+  const list = $('[data-filter-list]');
+  if(list) { const items = $$('[data-item]',list), search = $('#content-search'), filters = $$('[data-filter]'); let current = '全部'; const norm = s => s.toLocaleLowerCase('zh-TW').normalize('NFKC').replace(/\s+/g,'');
+    function update() { const term = norm(search?.value || ''); let count=0; items.forEach(item => { const visible = (current === '全部' || item.dataset.category === current) && norm(item.textContent).includes(term); item.hidden = !visible; if(visible) count++; }); const countEl = $('#result-count'); if(countEl) countEl.textContent = `顯示 ${count} ${list.dataset.type === 'faq' ? '題常見問題' : '篇文章'}`; $('#no-results')?.toggleAttribute('hidden',count > 0); }
+    filters.forEach(btn => btn.addEventListener('click',() => { current = btn.dataset.filter; filters.forEach(b => b.setAttribute('aria-pressed',String(b === btn))); update(); })); search?.addEventListener('input',update); update();
+    $('#expand-all')?.addEventListener('click',() => items.filter(x=>!x.hidden).forEach(x=>x.open=true)); $('#collapse-all')?.addEventListener('click',() => items.forEach(x=>x.open=false));
+  }
+  $('#copy-link')?.addEventListener('click',async () => { try { await navigator.clipboard.writeText(location.href); message('文章連結已複製。'); } catch { message('請從瀏覽器網址列複製這篇文章的連結。'); } }); $('#print-article')?.addEventListener('click',()=>window.print());
+  const sections = $$('[data-article-section]'); if(sections.length && 'IntersectionObserver' in window) { const tocObserver = new IntersectionObserver(entries => { entries.forEach(e => { if(e.isIntersecting) $$('.toc a').forEach(a => a.classList.toggle('active',a.hash === '#'+e.target.id)); }); }, {rootMargin:'-15% 0px -65% 0px'}); sections.forEach(el=>tocObserver.observe(el)); }
+})();
